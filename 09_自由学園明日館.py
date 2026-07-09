@@ -18,7 +18,7 @@ from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 BASENAME = "09_自由学園明日館"
-HDRI = os.path.join(HERE, "blue_photo_studio_4k.exr")
+TEST = os.environ.get("TEST_RENDER") == "1"  # 低解像度の確認用レンダリング
 
 # ---------------------------------------------------------------- scene reset
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -133,7 +133,7 @@ def add_tree(name, loc, trunk_h=2.2, canopy_r=1.5):
 # ---------------------------------------------------------------- ground
 add_box("ground", (90, 90, 0.2), (0, 0, -0.1), MAT["grass"])
 add_box("front_path", (3.2, 15, 0.24), (0, -8.4, -0.05), MAT["path"])
-add_box("cross_path", (26, 2.4, 0.24), (0, -13.5, -0.05), MAT["path"])
+add_box("cross_path", (26, 2.4, 0.22), (0, -13.5, -0.06), MAT["path"])
 
 # ---------------------------------------------------------------- central hall
 # 壁 (南面 y=0 が正面)
@@ -200,21 +200,19 @@ add_tree("tree_L", (-21.5, -12, 0), trunk_h=2.6, canopy_r=1.9)
 add_tree("tree_R", (22.0, -10, 0), trunk_h=2.3, canopy_r=1.7)
 
 # ---------------------------------------------------------------- lighting
+# 澄んだ空色の環境光 + 太陽光
 sun = bpy.data.lights.new("sun", type="SUN")
-sun.energy = 4.0
-sun.angle = math.radians(1.5)
+sun.energy = 3.5
+sun.angle = math.radians(2.0)
 sun_obj = bpy.data.objects.new("sun", sun)
-sun_obj.rotation_euler = (math.radians(50), 0, math.radians(-38))
+sun_obj.rotation_euler = (math.radians(48), 0, math.radians(-35))
 bpy.context.collection.objects.link(sun_obj)
 
 world = bpy.data.worlds.new("world")
 world.use_nodes = True
-nt = world.node_tree
-env = nt.nodes.new("ShaderNodeTexEnvironment")
-env.image = bpy.data.images.load(HDRI)
-bg = nt.nodes["Background"]
-bg.inputs["Strength"].default_value = 0.5
-nt.links.new(env.outputs["Color"], bg.inputs["Color"])
+bg = world.node_tree.nodes["Background"]
+bg.inputs["Color"].default_value = (0.45, 0.65, 0.92, 1.0)
+bg.inputs["Strength"].default_value = 0.8
 scene.world = world
 
 # ---------------------------------------------------------------- camera
@@ -230,17 +228,19 @@ scene.camera = cam
 # ---------------------------------------------------------------- render setup
 scene.render.engine = "CYCLES"
 scene.cycles.device = "CPU"
-scene.cycles.samples = 96
+scene.cycles.samples = 16 if TEST else 96
 scene.cycles.use_denoising = True
 scene.cycles.denoiser = "OPENIMAGEDENOISE"
-scene.render.resolution_x = 1920
-scene.render.resolution_y = 1080
+scene.render.resolution_x = 640 if TEST else 1920
+scene.render.resolution_y = 360 if TEST else 1080
 scene.view_settings.view_transform = "AgX"
 scene.view_settings.look = "AgX - Punchy"
-scene.render.filepath = os.path.join(HERE, BASENAME + ".png")
+scene.render.filepath = os.path.join(
+    HERE, BASENAME + ("_test.png" if TEST else ".png"))
 
 # ---------------------------------------------------------------- save & render
-bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, BASENAME + ".blend"),
-                            relative_remap=True)
+if not TEST:
+    bpy.ops.wm.save_as_mainfile(
+        filepath=os.path.join(HERE, BASENAME + ".blend"), relative_remap=True)
 bpy.ops.render.render(write_still=True)
 print("done:", scene.render.filepath)
